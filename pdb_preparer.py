@@ -84,6 +84,7 @@ class RESIDUE():
             self.convert_PTR2TYR()
         elif self.name == 'ZNA':
             self.convert_RECORD()
+            self.atm_in_res[0].atom_name = 'Zn'
         elif self.name == 'MG':
             self.convert_RECORD()
         self.res_df = pd.DataFrame()
@@ -456,9 +457,9 @@ class PDB_PREPARER():
                 for i in rec_line:
                     recfile.write(i)
 if __name__ == "__main__":
-    fakeArgs="-f protein_prev_1.pdb -l 1" #only keep this for test purpose
-    opts=optParser(fakeArgs.strip().split()) #only keep this for test purpose
-    # opts=optParser('')
+    # fakeArgs="-f protein_prev_1.pdb -l 1" #only keep this for test purpose
+    # opts=optParser(fakeArgs.strip().split()) #only keep this for test purpose
+    opts=optParser('')
     # print(int(opts.option.iflig))
     # print(bool(opts.option.iflig))
     ts = PDB_PREPARER(opts.option.file, int(opts.option.iflig))
