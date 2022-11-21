@@ -87,6 +87,8 @@ class RESIDUE():
             self.atm_in_res[0].atom_name = 'Zn'
         elif self.name == 'MG':
             self.convert_RECORD()
+        elif self.name == 'SO4':
+            self.convert_RECORD()
         self.res_df = pd.DataFrame()
 
     @property
@@ -209,6 +211,8 @@ class PDB_PREPARER():
                         res_name = 'ZNA'
                     elif line[17:20].strip() == 'MG':
                         res_name = 'MG'
+                    elif line[17:20].strip() == 'SO4':
+                        res_name = 'SO4'
                     else:
                         res_name = 'MOL'
                 else:
