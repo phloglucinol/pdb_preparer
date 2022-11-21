@@ -4,6 +4,8 @@ import re
 import numpy as np
 import pandas as pd
 import copy
+from itertools import groupby
+import operator
 
 class optParser():
     def __init__(self,fakeArgs):
@@ -16,6 +18,7 @@ class optParser():
             self.option, self.args = parser.parse_args(fakeArgs)
         else:
             self.option, self.args = parser.parse_args()
+
 
 class ATOM():
     def __init__(self, tpl):
@@ -42,10 +45,9 @@ class ATOM():
             self.chg_str = ''
         xyz=[self.x_coor, self.y_coor, self.z_coor]
         self.xyz = np.array(xyz)
-        
-    
+
     def __str__(self):
-        return "Atom: {} in {}_{} with atom serial number {}".format(self.atom_name, self.res_name, self.res_seq, self.atom_num)
+        return "Atom: {} in {}_{} with atom serial number {} and element {}".format(self.atom_name, self.res_name, self.res_seq, self.atom_num, self.element)
     
     def __repr__(self):
         return self.__str__()
@@ -76,8 +78,7 @@ class RESIDUE():
         self.atm_in_res = lst
         self.name = lst[0].res_name
         if self.name == 'MOL':
-            for i in self.atm_in_res:
-                i.atom_name = i.element
+            self.convert_MOL_atom()
         elif self.name == 'PTR':
             self.name = 'Y2P'
             self.convert_PTR2TYR()
@@ -85,7 +86,7 @@ class RESIDUE():
             self.convert_RECORD()
         elif self.name == 'MG':
             self.convert_RECORD()
-        
+        self.res_df = pd.DataFrame()
 
     @property
     def net_chg(self):
@@ -110,6 +111,19 @@ class RESIDUE():
                     i.atom_name = 'OG'
         self.atm_in_res = new_atm_in_res
     
+    def convert_MOL_atom(self):
+        _atm_in_res = copy.deepcopy(self.atm_in_res)
+        sorted_atm_in_res = sorted(_atm_in_res, key=operator.attrgetter('element'))
+        grouped_atoms = [list(grp_result) for key, grp_result
+                         in groupby(sorted_atm_in_res, key=operator.attrgetter('element'))]
+
+        new_atm_in_res = []
+        for every_group_atoms in grouped_atoms:
+            for idx, atm in enumerate(every_group_atoms):
+                atm.atom_name = f'{atm.element}{idx+1}'
+                new_atm_in_res.append(atm)
+        self.atm_in_res = _atm_in_res
+
     def convert_RECORD(self):
         new_atm_in_res = copy.deepcopy(self.atm_in_res)
         for i in new_atm_in_res:
@@ -117,7 +131,8 @@ class RESIDUE():
         self.atm_in_res = new_atm_in_res
 
     def generate_res_df(self):
-        column_lst = ['atom_num', 'atom_name', 'res_num', 'res_name', 'chainID', 'xyz', 'occupancy', 'tempFactor', 'charge']
+        column_lst = ['atom_num', 'atom_name', 'res_num', 'res_name',
+                      'chainID', 'xyz', 'occupancy', 'tempFactor', 'charge']
         index_lst = [i.atom_name for i in self.atm_in_res]
         self.res_df = pd.concat([pd.DataFrame({'atom_num': [i.atom_num],
                                                'atom_name': [i.atom_name],
@@ -128,14 +143,14 @@ class RESIDUE():
                                                'occupancy': [i.occupancy],
                                                'tempFactor': [i.tempFactor],
                                                'charge': [i.charge]
-                                              },columns=column_lst) for i in self.atm_in_res], ignore_index=True)
+                                               },columns=column_lst) for i in self.atm_in_res], ignore_index=True)
         self.res_df.index = index_lst
         return self.res_df
     
     def write_res_line(self):
-        l_str=''
+        l_str = ''
         for i in self.atm_in_res:
-            l_str+=i.write_atm_line()
+            l_str += i.write_atm_line()
         return l_str
     
     def rm_hydrogen(self):
@@ -149,7 +164,6 @@ class RESIDUE():
         self.name = new_name
         for i in self.atm_in_res:
             i.res_name = new_name
-
 
 
 class PDB_PREPARER():
@@ -442,9 +456,9 @@ class PDB_PREPARER():
                 for i in rec_line:
                     recfile.write(i)
 if __name__ == "__main__":
-    # fakeArgs="-f 5WA5_handled.pdb -l 1" #only keep this for test purpose
-    # opts=optParser(fakeArgs.strip().split()) #only keep this for test purpose
-    opts=optParser('')
+    fakeArgs="-f protein_prev_1.pdb -l 1" #only keep this for test purpose
+    opts=optParser(fakeArgs.strip().split()) #only keep this for test purpose
+    # opts=optParser('')
     # print(int(opts.option.iflig))
     # print(bool(opts.option.iflig))
     ts = PDB_PREPARER(opts.option.file, int(opts.option.iflig))
