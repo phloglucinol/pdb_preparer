@@ -45,6 +45,7 @@ class ATOM():
             self.chg_str = ''
         xyz=[self.x_coor, self.y_coor, self.z_coor]
         self.xyz = np.array(xyz)
+        self.terminal = False
 
     def __str__(self):
         return "Atom: {} in {}_{} with atom serial number {} and element {}".format(self.atom_name, self.res_name, self.res_seq, self.atom_num, self.element)
@@ -53,7 +54,7 @@ class ATOM():
         return self.__str__()
     
     def write_atm_line(self):
-        l_str='{: <6s}{: >5d} {: ^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{: >6.2f}{: >6.2f}          {: >2s}{:2s}\n'.format(
+        l_str='{: <6s}{: >5d} {: ^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{: >6.2f}{: >6.2f}          {: >2s}{:2s}'.format(
             self.record_name,
             self.atom_num,
             self.atom_name,
@@ -70,6 +71,10 @@ class ATOM():
             self.element,
             self.chg_str,
             )
+        if not self.terminal:
+            l_str += '\n'
+        else:
+            l_str += '\nTER\n'
         return l_str
     
 class RESIDUE():
@@ -85,10 +90,15 @@ class RESIDUE():
         elif self.name == 'ZNA':
             self.convert_RECORD()
             self.atm_in_res[0].atom_name = 'Zn'
+            self.atm_in_res[-1].terminal = True
         elif self.name == 'MG':
             self.convert_RECORD()
+            self.atm_in_res[-1].terminal = True
         elif self.name == 'SO4':
             self.convert_RECORD()
+            self.atm_in_res[-1].terminal = True
+        elif self.name == 'HOH':
+            self.atm_in_res[-1].terminal = True
         self.res_df = pd.DataFrame()
 
     @property
@@ -185,6 +195,11 @@ class PDB_PREPARER():
         self.residue_lst = []
         self.stretch_dct = {}
         self.read_pdb(self.file_name)
+        self.common_residue_name = ["ALA","ARG","ASH","ASN","ASP","CYM","CYS",
+                                    "CYX","GLH","GLN","GLU","GLY","HID","HIE",
+                                    "HIP","HIS","ILE","LEU","LYN","LYS","MET",
+                                    "PHE","PRO","SER","THR","TRP","TYR","VAL",
+                                    "PTR","Y2P","HSE","HSD","HSP"]
         
     def read_pdb(self, pdbin):
         
@@ -441,7 +456,8 @@ class PDB_PREPARER():
                         mol_line.append(res.write_res_line())
                     else:
                         rec_line.append(res.write_res_line())
-                if stretch[0].name != 'MOL':
+                # if stretch[0].name != 'MOL':
+                if stretch[0].name in self.common_residue_name:
                     rec_line.append('TER\n')
                 
             with open(ligand_pdb_name, 'w', encoding='utf-8') as ligfile:
@@ -456,7 +472,8 @@ class PDB_PREPARER():
                 for res in stretch:
                     if res.name != 'MOL':
                         rec_line.append(res.write_res_line())
-                rec_line.append('TER\n')
+                if stretch[0].name in self.common_residue_name:
+                    rec_line.append('TER\n')
             with open(protein_pdb_name, 'w', encoding='utf-8') as recfile:
                 for i in rec_line:
                     recfile.write(i)
