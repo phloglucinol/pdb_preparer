@@ -94,12 +94,19 @@ class RESIDUE():
         elif self.name == 'MG':
             self.convert_RECORD()
             self.atm_in_res[-1].terminal = True
+        elif self.name == 'TPO':
+            self.convert_RECORD()
         elif self.name == 'SO4':
             self.convert_RECORD()
             self.atm_in_res[-1].terminal = True
         elif self.name == 'HOH':
             self.atm_in_res[-1].terminal = True
         self.res_df = pd.DataFrame()
+        for atm in self.atm_in_res:
+            if atm.atom_name == 'C':
+                self.C_atom_xyz = atm.xyz
+            elif atm.atom_name == 'N':
+                self.N_atom_xyz = atm.xyz
 
     @property
     def net_chg(self):
@@ -109,7 +116,7 @@ class RESIDUE():
         return net_charge
     
     def __str__(self):
-        return "Residue: {}_{}".format(self.name, self.seq)
+        return "Residue: {}_{}, and the atm_in_res is {}".format(self.name, self.seq, self.atm_in_res)
     
     def __repr__(self):
         return self.__str__()
@@ -228,6 +235,8 @@ class PDB_PREPARER():
                         res_name = 'MG'
                     elif line[17:20].strip() == 'SO4':
                         res_name = 'SO4'
+                    elif line[17:20].strip() == 'TPO':
+                        res_name = 'TPO'
                     else:
                         res_name = 'MOL'
                 else:
@@ -284,19 +293,25 @@ class PDB_PREPARER():
                 self.res_seq_lst.append(res_seq)
                 self.atom_lst.append(atm_obj)
         
-        order_duplicate = []
-        for i in self.res_seq_lst:
-            if not i in order_duplicate:
-                order_duplicate.append(i)
-        self.res_seq_lst=order_duplicate
-
-        for seq in self.res_seq_lst:
-            one_res_atms = []
-            for atm in self.atom_lst:          
-                if atm.res_seq == seq:
-                    one_res_atms.append(atm)
-            oneres = RESIDUE(seq, one_res_atms)
-            self.residue_lst.append(oneres)
+        #Generate a list(one_res_atms) of atoms belonging to the same residue (according to residue name, sequence and chainID).
+        #Then generate the residue_lst consist of all residues(object type) in protein.
+        one_res_atms = []
+        seq = self.res_seq_lst[0] #will update in the following cycle
+        name = self.atom_lst[0].res_name #will update in the following cycle
+        chain = self.atom_lst[0].chainID #will update in the following cycle
+        for atm in self.atom_lst:         
+            if atm.res_seq == seq and atm.res_name == name and atm.chainID == chain:
+                one_res_atms.append(atm)
+            else:
+                oneres = RESIDUE(seq, one_res_atms)
+                # print(f'___________{oneres}_____________\n')
+                self.residue_lst.append(oneres)
+                one_res_atms = [atm] #reinitialize {one_res_atms} with the first atom in the next residue.
+            seq = atm.res_seq
+            name = atm.res_name
+            chain = atm.chainID
+        oneres = RESIDUE(seq, one_res_atms) #generate RESIDUE object for the last res.
+        self.residue_lst.append(oneres)
 
     def generate_stretch(self):
         '''
@@ -326,7 +341,9 @@ class PDB_PREPARER():
                 self.stretch_dct[stretch_num] = one_stretch
                 next_res_idx = self.residue_lst.index(res)+1
                 if next_res_idx < total_residue_num:
-                    if res.seq+1 == self.residue_lst[next_res_idx].seq:
+                    NC_distan = self.cal_NC_distance(res, self.residue_lst[next_res_idx])
+                    # if res.seq+1 == self.residue_lst[next_res_idx].seq:
+                    if NC_distan < 1.4:
                         needadd=False
                     else:
                         needadd=True
@@ -337,14 +354,41 @@ class PDB_PREPARER():
                 self.stretch_dct[stretch_num]=one_stretch
                 next_res_idx = self.residue_lst.index(res)+1
                 if next_res_idx < total_residue_num:
-                    if res.seq+1 == self.residue_lst[next_res_idx].seq:
+                    NC_distan = self.cal_NC_distance(res, self.residue_lst[next_res_idx])
+                    # if res.seq+1 == self.residue_lst[next_res_idx].seq:
+                    if NC_distan < 1.4:
                         needadd=False
                     else:
                         needadd=True
                 else:
                     pass
 #         return self.stretch_dct
-    
+
+    def cal_NC_distance(self, residue_obj1, residue_obj2):
+        '''
+        This function will calculate the distance from atom C in the first given residue to atom N 
+        in the next residue, which is used to determine whether these two residues are connected.
+        The data type of return value is float or int. If two residues are in different strenches, the return value will be 2.
+        
+        Example:
+        >>> fakeArgs="-f 5WA5_handled.pdb -l 1" #only keep this for test purpose
+        >>> opts=optParser(fakeArgs.strip().split()) #only keep this for test purpose
+        >>> ts = PDB_PREPARER(opts.option.file, bool(opts.option.iflig))
+        >>> residue_1 = ts.residue_lst[0]
+        >>> residue_2 = ts.residue_lst[1]
+        >>> ts.cal_NC_distance(residue_1, residue_2)
+        1.33
+        '''
+        try:
+            xyzC = residue_obj1.C_atom_xyz
+            xyzN = residue_obj2.N_atom_xyz
+            NC_distance = np.sqrt(np.sum((xyzN - xyzC) ** 2))
+            # print(f'Atom_C_xyz is {xyzC}, the next residue\'s atom_N_xyz is {xyzN}, distance is {NC_distance}')
+        except:
+            # print(f'<{residue_obj2.name} {residue_obj2.seq}> dosen\'t have N_atom.')
+            NC_distance = 2.0
+        return NC_distance
+
     def rm_stretch_fl_hydrogen(self):
         '''
         This function will remove hydrogen of the first residue and last residue of 
