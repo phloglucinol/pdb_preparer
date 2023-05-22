@@ -1,4 +1,4 @@
-#!/nfs/u1/local/amber20/miniconda/bin/python
+#!/nfs/u1/local/anaconda3/bin/python
 from optparse import OptionParser
 import re
 import numpy as np
@@ -82,6 +82,7 @@ class RESIDUE():
         self.seq = seq
         self.atm_in_res = lst
         self.name = lst[0].res_name
+        ori_atm_in_res = self.atm_in_res
         if self.name == 'MOL':
             self.convert_MOL_atom()
         elif self.name == 'PTR':
@@ -89,7 +90,7 @@ class RESIDUE():
             self.convert_PTR2TYR()
         elif self.name == 'ZNA':
             self.convert_RECORD()
-            self.atm_in_res[0].atom_name = 'Zn'
+            self.atm_in_res[0].atom_name = 'Zn' # could be changed to Zn according to the prepi file you use
             self.atm_in_res[-1].terminal = True
         elif self.name == 'MG':
             self.convert_RECORD()
@@ -101,12 +102,33 @@ class RESIDUE():
             self.atm_in_res[-1].terminal = True
         elif self.name == 'HOH':
             self.atm_in_res[-1].terminal = True
+        elif self.name in 'ASP':
+            for atm in ori_atm_in_res:
+                if atm.atom_name in ['HD2','HA2' ]:
+                    self.atm_in_res.remove(atm)
+        elif self.name == 'GLU':
+            for atm in ori_atm_in_res:
+                if atm.atom_name in ['HE2','HA2']:
+                    self.atm_in_res.remove(atm)
+        elif self.name in ['HIE']:
+            for atm in ori_atm_in_res:
+                if atm.atom_name == 'HD1':
+                    self.atm_in_res.remove(atm)
+
         self.res_df = pd.DataFrame()
-        for atm in self.atm_in_res:
+        for atm in ori_atm_in_res:
+            # remove the conformation ######################################
+            if atm.altLoc == '' or atm.altLoc == 'A':
+                pass
+            else:
+                self.atm_in_res.remove(atm)
+            ################################################################
+            # atom_name_lst.append(atm.atom_name)
             if atm.atom_name == 'C':
                 self.C_atom_xyz = atm.xyz
             elif atm.atom_name == 'N':
                 self.N_atom_xyz = atm.xyz
+            
 
     @property
     def net_chg(self):
@@ -200,6 +222,8 @@ class PDB_PREPARER():
         self.atom_lst = []
         self.res_seq_lst = []
         self.residue_lst = []
+        self.cys_res_lst = []
+        self.cyx_pairs = []
         self.stretch_dct = {}
         self.read_pdb(self.file_name)
         self.common_residue_name = ["ALA","ARG","ASH","ASN","ASP","CYM","CYS",
@@ -222,7 +246,7 @@ class PDB_PREPARER():
                 record_name = line[:6].strip()
                 atom_num = int(line[6:11])
                 atom_name = line[11:16].strip()
-                altLoc = line[16].strip()
+                altLoc = line[16].strip() # to identify different conformation
                 
                 if line.startswith('HETATM'):
                     if line[17:20].strip() == 'HOH':
@@ -237,6 +261,8 @@ class PDB_PREPARER():
                         res_name = 'SO4'
                     elif line[17:20].strip() == 'TPO':
                         res_name = 'TPO'
+                    elif line[17:20].strip() == 'CA':
+                        res_name = 'CA'
                     else:
                         res_name = 'MOL'
                 else:
@@ -312,6 +338,18 @@ class PDB_PREPARER():
             chain = atm.chainID
         oneres = RESIDUE(seq, one_res_atms) #generate RESIDUE object for the last res.
         self.residue_lst.append(oneres)
+
+
+
+            
+    def log_sbond_info(self, rec_obj_name='rec'):
+        '''
+        Loging the sbond information as tleap bond style, the default protein obj name is 'rec'
+        '''
+        with open('sbond.lst_bypdb_preparer', 'w') as f:
+            for sbond_pair in self.cyx_pairs:
+                print(f'bond {rec_obj_name}.{sbond_pair[0].seq}.SG bond {rec_obj_name}.{sbond_pair[1].seq}.SG', file=f)
+            
 
     def generate_stretch(self):
         '''
