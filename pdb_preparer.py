@@ -102,9 +102,15 @@ class RESIDUE():
             self.atm_in_res[-1].terminal = True
         elif self.name == 'HOH':
             self.atm_in_res[-1].terminal = True
-        elif self.name in 'ASP':
+        elif self.name == 'CYX':
+            for atm in ori_atm_in_res:
+                if atm.atom_name == 'HG':
+                    self.atm_in_res.remove(atm)
+        elif self.name == 'ASP':
             for atm in ori_atm_in_res:
                 if atm.atom_name in ['HD2','HA2' ]:
+                    self.atm_in_res.remove(atm)
+                elif 'HX' in atm.atom_name:
                     self.atm_in_res.remove(atm)
         elif self.name == 'GLU':
             for atm in ori_atm_in_res:
@@ -339,6 +345,31 @@ class PDB_PREPARER():
         oneres = RESIDUE(seq, one_res_atms) #generate RESIDUE object for the last res.
         self.residue_lst.append(oneres)
 
+        self.cys_res_v_sg_k = {}
+        for res in self.residue_lst:
+            if res.name == 'CYS' or res.name == 'CYX':
+                for atm in res.atm_in_res:
+                    if atm.atom_name == 'SG':
+                        self.cys_res_v_sg_k[atm] = res
+        self.cyx_pairs = []
+        processed_cys = set()
+        for sg_atm, cys in self.cys_res_v_sg_k.items():
+            for sg_atm_, cys_ in self.cys_res_v_sg_k.items():
+                if cys in processed_cys or cys_ in processed_cys:
+                    continue
+                if sg_atm == sg_atm_:
+                    continue
+                sgs_distance = np.around(np.sqrt(np.sum((sg_atm.xyz - sg_atm_.xyz) ** 2)),2)
+                if sgs_distance <= 2.06: # DISTANCE BETWEEN CYX.SG AND CYX.SG IS 2.05 A.
+                    self.cyx_pairs.append((cys, cys_))
+                    processed_cys.add(cys)
+                    processed_cys.add(cys_)
+                    for res in self.residue_lst:
+                        if res.atm_in_res == cys.atm_in_res:
+                            res.change_name('CYX')
+                        elif res.atm_in_res == cys_.atm_in_res:
+                            res.change_name('CYX')
+        self.log_sbond_info('rec')
 
 
             
