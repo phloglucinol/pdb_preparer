@@ -379,7 +379,7 @@ class PDB_PREPARER():
         '''
         with open('sbond.lst_bypdb_preparer', 'w') as f:
             for sbond_pair in self.cyx_pairs:
-                print(f'bond {rec_obj_name}.{sbond_pair[0].seq}.SG bond {rec_obj_name}.{sbond_pair[1].seq}.SG', file=f)
+                print(f'bond {rec_obj_name}.{sbond_pair[0].seq}.SG {rec_obj_name}.{sbond_pair[1].seq}.SG', file=f)
             
 
     def generate_stretch(self):
