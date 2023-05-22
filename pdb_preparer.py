@@ -369,13 +369,13 @@ class PDB_PREPARER():
                             res.change_name('CYX')
                         elif res.atm_in_res == cys_.atm_in_res:
                             res.change_name('CYX')
-        self.log_sbond_info('rec')
+        self.log_sbond_info('model')
 
 
             
-    def log_sbond_info(self, rec_obj_name='rec'):
+    def log_sbond_info(self, rec_obj_name='model'):
         '''
-        Loging the sbond information as tleap bond style, the default protein obj name is 'rec'
+        Loging the sbond information as tleap bond style, the default protein obj name is 'model'
         '''
         with open('sbond.lst_bypdb_preparer', 'w') as f:
             for sbond_pair in self.cyx_pairs:
