@@ -80,6 +80,13 @@ class ATOM():
 class RESIDUE():
     def __init__(self, seq, lst):
         self.seq = seq
+        for atm in lst:
+            # remove the conformation ######################################
+            if atm.altLoc == '' or atm.altLoc == 'A':
+                pass
+            else:
+                lst.remove(atm)
+            ################################################################
         self.atm_in_res = lst
         self.name = lst[0].res_name
         ori_atm_in_res = self.atm_in_res
@@ -122,14 +129,7 @@ class RESIDUE():
                     self.atm_in_res.remove(atm)
 
         self.res_df = pd.DataFrame()
-        for atm in ori_atm_in_res:
-            # remove the conformation ######################################
-            if atm.altLoc == '' or atm.altLoc == 'A':
-                pass
-            else:
-                self.atm_in_res.remove(atm)
-            ################################################################
-            # atom_name_lst.append(atm.atom_name)
+        for atm in self.atm_in_res:
             if atm.atom_name == 'C':
                 self.C_atom_xyz = atm.xyz
             elif atm.atom_name == 'N':
