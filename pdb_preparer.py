@@ -378,6 +378,7 @@ class PDB_PREPARER():
         Loging the sbond information as tleap bond style, the default protein obj name is 'model'
         '''
         with open('sbond.lst_bypdb_preparer', 'w') as f:
+            #self.cyx_pairs=[]
             for sbond_pair in self.cyx_pairs:
                 print(f'bond {rec_obj_name}.{sbond_pair[0].seq}.SG {rec_obj_name}.{sbond_pair[1].seq}.SG', file=f)
             
@@ -410,9 +411,9 @@ class PDB_PREPARER():
                 self.stretch_dct[stretch_num] = one_stretch
                 next_res_idx = self.residue_lst.index(res)+1
                 if next_res_idx < total_residue_num:
-                    NC_distan = self.cal_NC_distance(res, self.residue_lst[next_res_idx])
+                    NC_distan = np.around(self.cal_NC_distance(res, self.residue_lst[next_res_idx]), decimals=1)
                     # if res.seq+1 == self.residue_lst[next_res_idx].seq:
-                    if NC_distan < 1.4:
+                    if NC_distan <= 1.4:
                         needadd=False
                     else:
                         needadd=True
@@ -423,9 +424,9 @@ class PDB_PREPARER():
                 self.stretch_dct[stretch_num]=one_stretch
                 next_res_idx = self.residue_lst.index(res)+1
                 if next_res_idx < total_residue_num:
-                    NC_distan = self.cal_NC_distance(res, self.residue_lst[next_res_idx])
+                    NC_distan = np.around(self.cal_NC_distance(res, self.residue_lst[next_res_idx]),decimals=1)
                     # if res.seq+1 == self.residue_lst[next_res_idx].seq:
-                    if NC_distan < 1.4:
+                    if NC_distan <= 1.4:
                         needadd=False
                     else:
                         needadd=True
