@@ -30,6 +30,7 @@ class ATOM():
         self.chainID = tpl[5]
         self.res_seq = tpl[6]
         self.iCode = tpl[7]
+        self.uni_res_seq = f'{self.res_seq}{self.iCode}'
         self.x_coor = tpl[8]
         self.y_coor = tpl[9]
         self.z_coor = tpl[10]
@@ -202,7 +203,7 @@ class RESIDUE():
         return l_str
     
     def rm_hydrogen(self):
-        h_pattern = re.compile(r'^H.*')
+        h_pattern = re.compile(r'^\d?H.*')
         new_atm_in_res = self.atm_in_res.copy()
         for i in new_atm_in_res:
             if h_pattern.match(i.atom_name):
@@ -329,21 +330,28 @@ class PDB_PREPARER():
         #Then generate the residue_lst consist of all residues(object type) in protein.
         one_res_atms = []
         seq = self.res_seq_lst[0] #will update in the following cycle
+        uni_res_seq = self.atom_lst[0].uni_res_seq #will update in the following cycle
         name = self.atom_lst[0].res_name #will update in the following cycle
         chain = self.atom_lst[0].chainID #will update in the following cycle
         for atm in self.atom_lst:         
-            if atm.res_seq == seq and atm.res_name == name and atm.chainID == chain:
+            if atm.uni_res_seq == uni_res_seq and atm.res_name == name and atm.chainID == chain:
                 one_res_atms.append(atm)
             else:
                 oneres = RESIDUE(seq, one_res_atms)
                 # print(f'___________{oneres}_____________\n')
                 self.residue_lst.append(oneres)
                 one_res_atms = [atm] #reinitialize {one_res_atms} with the first atom in the next residue.
-            seq = atm.res_seq
+            uni_res_seq = atm.uni_res_seq
             name = atm.res_name
             chain = atm.chainID
         oneres = RESIDUE(seq, one_res_atms) #generate RESIDUE object for the last res.
         self.residue_lst.append(oneres)
+        # Renumber the residue sequence number
+        for i, res in enumerate(self.residue_lst):
+            res.seq = i+1
+            for atm in res.atm_in_res:
+                atm.res_seq = i+1
+
 
         self.cys_res_v_sg_k = {}
         for res in self.residue_lst:
