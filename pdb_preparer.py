@@ -101,8 +101,11 @@ class RESIDUE():
             self.convert_RECORD()
             self.atm_in_res[0].atom_name = 'Zn' # could be changed to Zn according to the prepi file you use
             self.atm_in_res[-1].terminal = True
-        elif self.name in ['MG', 'NA', 'CA', 'CO', 'CD', 'CS', 'CU', 'FE', 'FE2', 'HG', 'K', 'LI', 'MN', 'NI', 'SR']:
+        elif self.name in ['MG', 'NA', 'CA', 'CO', 'CD', 'CS', 'CU', 'FE', 'HG', 'K', 'LI', 'MN', 'NI', 'SR']:
             self.convert_RECORD()
+            self.atm_in_res[-1].terminal = True
+        elif self.name == 'FE2':
+            self.process_FE2()
             self.atm_in_res[-1].terminal = True
         elif self.name == 'CSO':
             self.convert_RECORD()
@@ -161,6 +164,13 @@ class RESIDUE():
     
     def __repr__(self):
         return self.__str__()
+
+    def process_FE2(self):
+        new_atm_in_res = copy.deepcopy(self.atm_in_res)
+        for i in new_atm_in_res:
+            i.record_name = 'ATOM'
+            i.atom_name = 'FE2'
+        self.atm_in_res = new_atm_in_res
 
     def convert_PTR2TYR(self):
         new_atm_in_res = copy.deepcopy(self.atm_in_res)
@@ -718,7 +728,7 @@ class PDB_PREPARER():
                         else:
                             rec_line.append(res.write_res_line())
                     # if stretch[0].name != 'MOL':
-                    if stretch[0].name in self.common_residue_name:
+                    if stretch[0].name in self.common_residue_name or stretch[-1].name in self.common_residue_name:
                         rec_line.append('TER\n')
                 
             with open(ligand_pdb_name, 'w', encoding='utf-8') as ligfile:
@@ -734,7 +744,7 @@ class PDB_PREPARER():
                     for res in stretch:
                         if res.name != 'MOL':
                             rec_line.append(res.write_res_line())
-                    if stretch[0].name in self.common_residue_name:
+                    if stretch[0].name in self.common_residue_name or stretch[-1].name in self.common_residue_name:
                         rec_line.append('TER\n')
             with open(protein_pdb_name, 'w', encoding='utf-8') as recfile:
                 for i in rec_line:
