@@ -6,6 +6,7 @@ import pandas as pd
 import copy
 from itertools import groupby
 import operator
+import logging
 
 class optParser():
     def __init__(self,fakeArgs):
@@ -100,9 +101,17 @@ class RESIDUE():
             self.convert_RECORD()
             self.atm_in_res[0].atom_name = 'Zn' # could be changed to Zn according to the prepi file you use
             self.atm_in_res[-1].terminal = True
-        elif self.name == 'MG':
+        elif self.name in ['MG', 'NA', 'CA', 'CO', 'CD', 'CS', 'CU', 'FE', 'FE2', 'HG', 'K', 'LI', 'MN', 'NI', 'SR']:
             self.convert_RECORD()
             self.atm_in_res[-1].terminal = True
+        elif self.name == 'CSO':
+            self.convert_RECORD()
+        elif self.name == 'KCX':
+            self.convert_RECORD()
+        elif self.name == 'PCA':
+            self.convert_RECORD()
+        elif self.name == 'SEP':
+            self.convert_RECORD()
         elif self.name == 'TPO':
             self.convert_RECORD()
         elif self.name == 'SO4':
@@ -128,6 +137,9 @@ class RESIDUE():
             for atm in ori_atm_in_res:
                 if atm.atom_name == 'HD1':
                     self.atm_in_res.remove(atm)
+        elif self.name in ['MSE', 'MET']:
+            self.name = 'MET'
+            self.convert_MSE2MET()
 
         self.res_df = pd.DataFrame()
         for atm in self.atm_in_res:
@@ -149,7 +161,7 @@ class RESIDUE():
     
     def __repr__(self):
         return self.__str__()
-    
+
     def convert_PTR2TYR(self):
         new_atm_in_res = copy.deepcopy(self.atm_in_res)
         for i in new_atm_in_res:
@@ -160,6 +172,16 @@ class RESIDUE():
                     i.atom_name = 'OG'
         self.atm_in_res = new_atm_in_res
     
+    def convert_MSE2MET(self):
+        new_atm_in_res = copy.deepcopy(self.atm_in_res)
+        for i in new_atm_in_res:
+            if i.res_name == 'MSE':
+                i.record_name = 'ATOM'
+                i.res_name = 'MET'
+                if i.atom_name == 'SE':
+                    i.atom_name = 'SD'
+        self.atm_in_res = new_atm_in_res
+
     def convert_MOL_atom(self):
         _atm_in_res = copy.deepcopy(self.atm_in_res)
         sorted_atm_in_res = sorted(_atm_in_res, key=operator.attrgetter('element'))
@@ -223,30 +245,42 @@ class PDB_PREPARER():
     filling missing atoms, 
     optimize hydrogen bond assignment).
     '''
-    def __init__(self, file_name, iflig):
+    def __init__(self, file_name, iflig, save_non_standard_residue=False):
         self.file_name = file_name
-        self.iflig = iflig       
+        self.iflig = iflig    
+        self.save_non_standard_residue = save_non_standard_residue   
         self.atom_lst = []
         self.res_seq_lst = []
         self.residue_lst = []
         self.cys_res_lst = []
         self.cyx_pairs = []
         self.stretch_dct = {}
-        self.read_pdb(self.file_name)
         self.common_residue_name = ["ALA","ARG","ASH","ASN","ASP","CYM","CYS",
-                                    "CYX","GLH","GLN","GLU","GLY","HID","HIE",
-                                    "HIP","HIS","ILE","LEU","LYN","LYS","MET",
-                                    "PHE","PRO","SER","THR","TRP","TYR","VAL",
-                                    "PTR","Y2P","HSE","HSD","HSP"]
-        
-    def read_pdb(self, pdbin):
+                            "CYX","GLH","GLN","GLU","GLY","HID","HIE",
+                            "HIP","HIS","ILE","LEU","LYN","LYS","MET",
+                            "PHE","PRO","SER","THR","TRP","TYR","VAL",
+                            "PTR","Y2P","HSE","HSD","HSP"]
+        logging.basicConfig(filename='pdb_preparer.log', level=logging.WARNING,
+                            format='%(asctime)s - %(levelname)s - %(message)s')
+        self.read_pdb(self.file_name, save_non_standard_residue=self.save_non_standard_residue)
+
+    def write_non_standard_residues(self, non_standard_residues):
+        for residue_key, residue_lines in non_standard_residues.items():
+            filename = f"{residue_key}.pdb"
+            with open(filename, 'w') as f:
+                for atom_obj_ in residue_lines:
+                    f.write(atom_obj_.write_atm_line())
+            logging.warning(f"Non-standard residue {residue_key} written to {filename}")
+
+    def read_pdb(self, pdbin, save_non_standard_residue=False):
         
         file_in = open(pdbin)
         lines = file_in.readlines()
-        self.parse_pdb_lines(lines)
+        self.parse_pdb_lines(lines, save_non_standard_residue)
     
-    def parse_pdb_lines(self, pdb_lines):
-        
+    def parse_pdb_lines(self, pdb_lines, save_non_standard_residue=False):
+        non_standard_residues = {}
+        current_non_standard = None
         for line in pdb_lines:
             if line.startswith('ATOM') or line.startswith('HETATM'):
                 
@@ -264,13 +298,53 @@ class PDB_PREPARER():
                         res_name = 'ZNA'
                     elif line[17:20].strip() == 'MG':
                         res_name = 'MG'
+                    elif line[17:20].strip() == 'CD':
+                        res_name = 'CD'
+                    elif line[17:20].strip() == 'CO':
+                        res_name = 'CO'
+                    elif line[17:20].strip() == 'CS':
+                        res_name = 'CS'
+                    elif line[17:20].strip() == 'CU':
+                        res_name = 'CU'
+                    elif line[17:20].strip() == 'FE':
+                        res_name = 'FE'
+                    elif line[17:20].strip() == 'FE2':
+                        res_name = 'FE2'
+                    elif line[17:20].strip() == 'HG':
+                        res_name = 'HG'
+                    elif line[17:20].strip() == 'K':
+                        res_name = 'K'
+                    elif line[17:20].strip() == 'LI':
+                        res_name = 'LI'
+                    elif line[17:20].strip() == 'MN':
+                        res_name = 'MN'
+                    elif line[17:20].strip() == 'NI':
+                        res_name = 'NI'
+                    elif line[17:20].strip() == 'SR':
+                        res_name = 'SR'
                     elif line[17:20].strip() == 'SO4':
                         res_name = 'SO4'
+                    elif line[17:20].strip() == 'CSO':
+                        res_name = 'CSO'
+                    elif line[17:20].strip() == 'KCX':
+                        res_name = 'KCX'
+                    elif line[17:20].strip() == 'PCA':
+                        res_name = 'PCA'
+                    elif line[17:20].strip() == 'SEP':
+                        res_name = 'SEP'
                     elif line[17:20].strip() == 'TPO':
                         res_name = 'TPO'
-                    elif line[17:20].strip() == 'CA':
+                    elif line[17:20].strip() == 'CA' or line[17:20].strip() == 'CAS':
                         res_name = 'CA'
+
+                    elif line[17:20].strip() == 'LIG':
+                        res_name = 'MOL'
+                    elif line[17:20].strip() == 'MSE':
+                        res_name = 'MSE'
+                    elif line[17:20].strip() == 'NA':
+                        res_name = 'NA'
                     else:
+                        logging.warning(f'Warning the residue name is not recognized, it will be treated as a MOL, whose residue name is {line[17:20].strip()}')
                         res_name = 'MOL'
                 else:
                     res_name = line[17:20].strip()
@@ -325,6 +399,14 @@ class PDB_PREPARER():
                 atm_obj = ATOM(atom_tuple)
                 self.res_seq_lst.append(res_seq)
                 self.atom_lst.append(atm_obj)
+                if res_name not in self.common_residue_name and res_name not in ['HOH', 'MOL']:
+                    residue_key = f'{res_name}_{chainID}_{res_seq}'
+                    if residue_key not in non_standard_residues:
+                        non_standard_residues[residue_key] = []
+                    non_standard_residues[residue_key].append(atm_obj)
+        # Write non-standard residues to separate files
+        if save_non_standard_residue:
+            self.write_non_standard_residues(non_standard_residues)
         
         #Generate a list(one_res_atms) of atoms belonging to the same residue (according to residue name, sequence and chainID).
         #Then generate the residue_lst consist of all residues(object type) in protein.
@@ -351,8 +433,14 @@ class PDB_PREPARER():
             res.seq = i+1
             for atm in res.atm_in_res:
                 atm.res_seq = i+1
+        
+        self.check_ifcys_is_cyx('model')
+        self.check_ifcys_is_cym(("ZN", "ZNA", 'MG', 'NA', 'CA', 'CO', 'CD', 'CS', 'CU', 'FE', 'FE2', 'HG', 'K', 'LI', 'MN', 'NI', 'SR'))
 
-
+    def check_ifcys_is_cyx(self, tleap_obj='model'):
+        '''
+        This function will check if the CYS residue is CYX, if yes, change the residue name to CYX.
+        '''
         self.cys_res_v_sg_k = {}
         for res in self.residue_lst:
             if res.name == 'CYS' or res.name == 'CYX':
@@ -377,9 +465,35 @@ class PDB_PREPARER():
                             res.change_name('CYX')
                         elif res.atm_in_res == cys_.atm_in_res:
                             res.change_name('CYX')
-        self.log_sbond_info('model')
+        self.log_sbond_info(tleap_obj)
+    
+    def check_ifcys_is_cym(self,metal_ion_set=("ZN", "ZNA", 'MG', 'NA', 'CA', 'CO', 'CD', 'CS', 'CU', 'FE', 'FE2', 'HG', 'K', 'LI', 'MN', 'NI', 'SR')):
+        '''
+        This function will check if the CYS residue is CYM, if yes, change the residue name to CYM.
+        '''
+        metal_ions = []
+        for res in self.residue_lst:
+            if res.name in metal_ion_set:
+                metal_ions.extend(res.atm_in_res)
 
-
+        for res in self.residue_lst:
+            if res.name == 'CYS' or res.name == 'CYM':
+                has_hg = False
+                for atm in res.atm_in_res:
+                    if atm.atom_name == 'HG':
+                        has_hg = True
+                        break
+                for atm in res.atm_in_res:
+                    if atm.atom_name == 'SG':
+                        for metal_ion in metal_ions:
+                            distance = np.linalg.norm(atm.xyz - metal_ion.xyz)
+                            if distance <= 2.5:
+                                if not has_hg:
+                                    res.change_name('CYM')
+                                    logging.warning(f"Changed residue {res.name}_{res.seq} to CYM due to nearby metal ion {metal_ion.res_name}_{metal_ion.res_seq}, whose distance is {distance:.2f}.")
+                                else:
+                                    logging.warning(f"Residue {res.name}_{res.seq} has an HG atom but is close to metal ion {metal_ion.res_name}_{metal_ion.res_seq}, whose distance is {distance:.2f}. This CYS may not be supposed to have an HG atom.")
+                                break
             
     def log_sbond_info(self, rec_obj_name='model'):
         '''
@@ -542,7 +656,31 @@ class PDB_PREPARER():
         self.stretch_dct = dct
 #         return self.stretch_dct
 
-    
+    def remove_isolated_ions(self, colv_ion_bond_threshold=2.5, ion_residue_set=("ZN", "ZNA", 'MG', 'NA', 'CA', 'CO', 'CD', 'CS', 'CU', 'FE', 'FE2', 'HG', 'K', 'LI', 'MN', 'NI', 'SR')):
+        for stretch in self.stretch_dct.values():
+            residues_to_remove = []
+            for res in stretch:
+                if res.name in ion_residue_set:
+                    is_isolated = True
+                    for atm in res.atm_in_res:
+                        for other_res in self.residue_lst:
+                            if other_res.seq != res.seq or other_res.name != res.name:
+                                for other_atm in other_res.atm_in_res:
+                                    distance = np.linalg.norm(atm.xyz - other_atm.xyz)
+                                    if distance < colv_ion_bond_threshold:
+                                        logging.warning(f"The {res.name}_{res.seq} is isolated from {other_res.name}_{other_res.seq} by {distance} A.")
+                                        is_isolated = False
+                                        break
+                            if not is_isolated:
+                                break
+                        if not is_isolated:
+                            break
+                    if is_isolated:
+                        residues_to_remove.append(res)
+            for res in residues_to_remove:
+                stretch.remove(res)
+                logging.warning(f"Removed isolated ion residue: {res.name}_{res.seq}")
+
     def prepare_4_amberleap(self):
         '''
         This function will generate the self.stretch_dct, whose the first and the last residues hydrogen is removed 
@@ -573,14 +711,15 @@ class PDB_PREPARER():
             mol_line = []
             rec_line = []
             for stretch in dct.values():
-                for res in stretch:
-                    if res.name == 'MOL':
-                        mol_line.append(res.write_res_line())
-                    else:
-                        rec_line.append(res.write_res_line())
-                # if stretch[0].name != 'MOL':
-                if stretch[0].name in self.common_residue_name:
-                    rec_line.append('TER\n')
+                if stretch:
+                    for res in stretch:
+                        if res.name == 'MOL':
+                            mol_line.append(res.write_res_line())
+                        else:
+                            rec_line.append(res.write_res_line())
+                    # if stretch[0].name != 'MOL':
+                    if stretch[0].name in self.common_residue_name:
+                        rec_line.append('TER\n')
                 
             with open(ligand_pdb_name, 'w', encoding='utf-8') as ligfile:
                 for i in mol_line:
@@ -591,11 +730,12 @@ class PDB_PREPARER():
         else:
             rec_line = []
             for stretch in dct.values():
-                for res in stretch:
-                    if res.name != 'MOL':
-                        rec_line.append(res.write_res_line())
-                if stretch[0].name in self.common_residue_name:
-                    rec_line.append('TER\n')
+                if stretch:
+                    for res in stretch:
+                        if res.name != 'MOL':
+                            rec_line.append(res.write_res_line())
+                    if stretch[0].name in self.common_residue_name:
+                        rec_line.append('TER\n')
             with open(protein_pdb_name, 'w', encoding='utf-8') as recfile:
                 for i in rec_line:
                     recfile.write(i)
@@ -605,8 +745,9 @@ if __name__ == "__main__":
     opts=optParser('')
     # print(int(opts.option.iflig))
     # print(bool(opts.option.iflig))
-    ts = PDB_PREPARER(opts.option.file, int(opts.option.iflig))
+    ts = PDB_PREPARER(opts.option.file, int(opts.option.iflig), save_non_standard_residue=True)
     ts.prepare_4_amberleap()
+    ts.remove_isolated_ions()
     ts.write_pdb(ts.stretch_dct,)
     if int(opts.option.iflig):
         print(ts.get_MOL_net_chg())
